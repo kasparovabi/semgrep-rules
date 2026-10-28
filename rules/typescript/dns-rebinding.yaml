@@ -1,0 +1,97 @@
+rules:
+  - id: ts-mcp-http-transport-without-dns-rebinding-protection
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      This MCP HTTP transport is created without enableDnsRebindingProtection:
+      true. In @modelcontextprotocol/sdk the option defaults to false, and then
+      the transport does not check Host or Origin. A web page that rebinds its
+      hostname to 127.0.0.1 is same-origin to the browser and can call the
+      local server's tools and read the results. Turn the option on and set
+      allowedHosts (and allowedOrigins), or validate Host in middleware in
+      front of the transport.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-346: Origin Validation Error"
+      references:
+        - https://github.com/devantler-tech/ksail/security/advisories/GHSA-g57x-rm7r-hf26
+        - https://github.com/kasparovabi/security-research/blob/main/2026-10-ksail-webui-dns-rebinding.md
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: new StreamableHTTPServerTransport(...)
+          - pattern: new SSEServerTransport(...)
+      - pattern-not: 'new StreamableHTTPServerTransport({..., enableDnsRebindingProtection: true, ...})'
+      - pattern-not: 'new SSEServerTransport($EP, $RES, {..., enableDnsRebindingProtection: true, ...})'
+
+  - id: ts-host-origin-guard-skips-safe-methods
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      This middleware calls next() for some HTTP methods before it checks Host
+      or Origin. A DNS rebinding page is same-origin to the browser, so it can
+      read the responses of every route that skips the check. Check Host on
+      every request, and Origin whenever it is present.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-346: Origin Validation Error"
+      references:
+        - https://github.com/devantler-tech/ksail/security/advisories/GHSA-g57x-rm7r-hf26
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              ($REQ, $RES, $NEXT) => {
+                ...
+              }
+          - pattern-inside: |
+              function $F($REQ, $RES, $NEXT) {
+                ...
+              }
+      - pattern-either:
+          - pattern-inside: |
+              if (<... $REQ.method ...>) {
+                ...
+              }
+              ...
+              if (<... $REQ.headers.host ...>) {
+                ...
+              }
+          - pattern-inside: |
+              if (<... $REQ.method ...>) {
+                ...
+              }
+              ...
+              $V = <... $REQ.headers.host ...>;
+          - pattern-inside: |
+              if (<... $REQ.method ...>) {
+                ...
+              }
+              ...
+              $V = <... $REQ.headers.origin ...>;
+          - pattern-inside: |
+              if (<... $REQ.method ...>) {
+                ...
+              }
+              ...
+              $V = <... $REQ.get("host") ...>;
+      - pattern-either:
+          - pattern: |
+              if (<... $REQ.method ...>) {
+                ...
+                return $NEXT();
+              }
+          - pattern: |
+              if (<... $REQ.method ...>) {
+                ...
+                $NEXT();
+                ...
+              }
+          - pattern: |
+              if (<... $REQ.method ...>) return $NEXT();

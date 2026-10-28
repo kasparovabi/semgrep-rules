@@ -1,0 +1,116 @@
+rules:
+  - id: python313-removed-stdlib-module
+    languages: [python]
+    severity: WARNING
+    message: >-
+      The module '$M' was removed from the standard library in Python 3.13
+      (PEP 594, plus lib2to3 and tkinter.tix), so this import raises
+      ModuleNotFoundError on 3.13 and later. Common replacements are
+      pipes.quote -> shlex.quote, cgi.escape -> html.escape,
+      cgi.parse_header -> email.message.Message, audioop -> the audioop-lts
+      package, telnetlib -> telnetlib3 or Exscript, crypt -> passlib or bcrypt,
+      imghdr / sndhdr -> filetype or puremagic, uu -> base64. Most of the
+      others have standard-<name> backports on PyPI (python-deadlib). If the
+      import is unused, remove it.
+    metadata:
+      category: compatibility
+      references:
+        - https://peps.python.org/pep-0594/
+        - https://docs.python.org/3/whatsnew/3.13.html#removed-modules-and-apis
+      confidence: HIGH
+      likelihood: HIGH
+      impact: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: import $M
+          - pattern: import $M as $ALIAS
+          - pattern: from $M import $X
+          - pattern: from $M import $X as $ALIAS
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(aifc|audioop|cgi|cgitb|chunk|crypt|imghdr|mailcap|msilib|nis|nntplib|ossaudiodev|pipes|sndhdr|spwd|sunau|telnetlib|uu|xdrlib|lib2to3|tkinter\.tix)(\..*)?$
+      - pattern-not-inside: |
+          try:
+              ...
+          except ImportError:
+              ...
+      - pattern-not-inside: |
+          try:
+              ...
+          except ModuleNotFoundError:
+              ...
+      - pattern-not-inside: |
+          try:
+              ...
+          except (..., ImportError, ...):
+              ...
+      - pattern-not-inside: |
+          try:
+              ...
+          except (..., ModuleNotFoundError, ...):
+              ...
+      - pattern-not-inside: |
+          if sys.version_info < $V:
+              ...
+      - pattern-not-inside: |
+          if sys.version_info >= $V:
+              ...
+          else:
+              ...
+
+  - id: python312-removed-stdlib-module
+    languages: [python]
+    severity: WARNING
+    message: >-
+      The module '$M' was removed from the standard library in Python 3.12, so
+      this import raises ModuleNotFoundError on 3.12 and later. asyncore and
+      asynchat -> asyncio, smtpd -> aiosmtpd, imp -> importlib, distutils ->
+      setuptools or packaging (setuptools ships a distutils shim, so the import
+      may still work when setuptools is installed, but that is not something
+      to rely on). If the import is unused, remove it.
+    metadata:
+      category: compatibility
+      references:
+        - https://peps.python.org/pep-0594/
+        - https://peps.python.org/pep-0632/
+        - https://docs.python.org/3/whatsnew/3.12.html#removed
+      confidence: HIGH
+      likelihood: HIGH
+      impact: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: import $M
+          - pattern: import $M as $ALIAS
+          - pattern: from $M import $X
+          - pattern: from $M import $X as $ALIAS
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(asyncore|asynchat|smtpd|imp|distutils)(\..*)?$
+      - pattern-not-inside: |
+          try:
+              ...
+          except ImportError:
+              ...
+      - pattern-not-inside: |
+          try:
+              ...
+          except ModuleNotFoundError:
+              ...
+      - pattern-not-inside: |
+          try:
+              ...
+          except (..., ImportError, ...):
+              ...
+      - pattern-not-inside: |
+          try:
+              ...
+          except (..., ModuleNotFoundError, ...):
+              ...
+      - pattern-not-inside: |
+          if sys.version_info < $V:
+              ...
+      - pattern-not-inside: |
+          if sys.version_info >= $V:
+              ...
+          else:
+              ...

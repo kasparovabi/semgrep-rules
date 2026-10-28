@@ -1,0 +1,79 @@
+rules:
+  - id: python-cors-allows-any-origin
+    languages: [python]
+    severity: WARNING
+    message: >-
+      CORS is configured to allow every origin. For a public, read-only API that
+      can be fine. For a local or loopback API without authentication it lets
+      any web page open in the user's browser read responses and send state
+      changing requests, because a browser on the same machine is itself a
+      loopback client. List the origins that need access instead, and add
+      authentication if the API holds private data.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+      references:
+        - https://github.com/GuyMannDude/mnemo-cortex/security/advisories/GHSA-682p-grrx-wrwg
+        - https://github.com/kasparovabi/security-research/blob/main/2026-10-mnemo-cortex-cors-loopback.md
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    mode: taint
+    pattern-sources:
+      - pattern: '[..., "*", ...]'
+      - pattern: '("*",)'
+      - pattern: '"*"'
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $APP.add_middleware(CORSMiddleware, ..., allow_origins=$O, ...)
+              - pattern: CORSMiddleware($APP, ..., allow_origins=$O, ...)
+              - pattern: flask_cors.CORS($APP, ..., origins=$O, ...)
+              - pattern: 'flask_cors.CORS($APP, ..., resources={..., $PATH: {..., "origins": $O, ...}, ...}, ...)'
+          - focus-metavariable: $O
+
+  - id: python-cors-origin-regex-matches-anything
+    languages: [python]
+    severity: WARNING
+    message: >-
+      allow_origin_regex matches every origin, which has the same effect as a
+      wildcard. On a local API without authentication any web page can read the
+      responses. Anchor the pattern to the origins you expect.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+      references:
+        - https://github.com/GuyMannDude/mnemo-cortex/security/advisories/GHSA-682p-grrx-wrwg
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $APP.add_middleware(CORSMiddleware, ..., allow_origin_regex=$R, ...)
+          - pattern: CORSMiddleware($APP, ..., allow_origin_regex=$R, ...)
+      - metavariable-regex:
+          metavariable: $R
+          regex: ^[rbu]?["']\^?(https\?://|https?://)?\.[*+]\$?["']$
+
+  - id: python-flask-cors-default-any-origin
+    languages: [python]
+    severity: WARNING
+    message: >-
+      flask_cors.CORS(app) without an origins or resources argument allows every
+      origin. On a local API without authentication any web page can read the
+      responses. Pass the origins that need access.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+      references:
+        - https://github.com/GuyMannDude/mnemo-cortex/security/advisories/GHSA-682p-grrx-wrwg
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern: flask_cors.CORS($APP, ...)
+      - pattern-not: flask_cors.CORS($APP, ..., origins=$O, ...)
+      - pattern-not: flask_cors.CORS($APP, ..., resources=$O, ...)

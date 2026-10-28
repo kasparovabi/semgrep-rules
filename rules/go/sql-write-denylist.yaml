@@ -1,0 +1,47 @@
+rules:
+  - id: go-sql-write-keyword-denylist-without-into
+    languages: [go]
+    severity: WARNING
+    message: >-
+      This looks like a denylist of SQL write keywords used to decide whether a
+      statement is read-only, and it does not contain INTO. SELECT ... INTO
+      creates and fills a table in PostgreSQL, and SELECT ... INTO OUTFILE or
+      DUMPFILE writes a file on a MySQL server, so these statements pass as
+      reads. Adding words does not make a denylist complete. Accept only a
+      bounded read grammar and treat everything else as a write that needs
+      approval, and run read-only sessions with a database account that has
+      no CREATE and no FILE privilege.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-863: Incorrect Authorization"
+        - "CWE-184: Incomplete List of Disallowed Inputs"
+      references:
+        - https://github.com/clidey/whodb/security/advisories/GHSA-pvf2-6h4x-r24j
+        - https://github.com/kasparovabi/security-research/blob/main/2026-09-whodb-select-into.md
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: MEDIUM
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: '[]string{..., $A, ...}'
+              - pattern: '[...]string{..., $A, ...}'
+          - metavariable-regex:
+              metavariable: $A
+              regex: (?i)^["`]insert["`]$
+          - pattern-either:
+              - pattern: '[]string{..., $B, ...}'
+              - pattern: '[...]string{..., $B, ...}'
+          - metavariable-regex:
+              metavariable: $B
+              regex: (?i)^["`]update["`]$
+          - pattern-either:
+              - pattern: '[]string{..., $C, ...}'
+              - pattern: '[...]string{..., $C, ...}'
+          - metavariable-regex:
+              metavariable: $C
+              regex: (?i)^["`](delete|drop|alter|create|truncate)["`]$
+          - pattern-not-regex: (?i)["`]into["`]
+      # Semgrep cannot match keys inside a Go map literal, so maps are found by text.
+      - pattern-regex: (?is)map\[string\](?:bool|int|struct\{\})\s*\{(?=(?:[^{}]|\{\})*["`]insert["`]\s*:)(?=(?:[^{}]|\{\})*["`]update["`]\s*:)(?=(?:[^{}]|\{\})*["`](?:delete|drop|alter|create|truncate)["`]\s*:)(?!(?:[^{}]|\{\})*["`]into["`]\s*:)(?:[^{}]|\{\})*\}

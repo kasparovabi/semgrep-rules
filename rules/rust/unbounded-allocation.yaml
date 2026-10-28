@@ -1,0 +1,116 @@
+rules:
+  - id: rust-allocation-sized-by-parsed-count
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      A count parsed from input sizes this allocation, and no upper bound is
+      checked first. If the count is larger than available memory, the
+      allocator calls handle_alloc_error and the process aborts. An abort is
+      not a panic, so catch_unwind and other panic guards cannot stop it, and
+      every session served by the process ends. Bound the count by what the
+      remaining input could actually describe (for example remaining bytes
+      divided by the minimum record size), not only by a fixed cap, and use
+      try_reserve where the size can still be large.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-789: Memory Allocation with Excessive Size Value"
+        - "CWE-400: Uncontrolled Resource Consumption"
+      references:
+        - https://github.com/embedded-society/altium-designer-mcp/security/advisories/GHSA-p2qw-h8m7-5x69
+        - https://github.com/kasparovabi/security-research/blob/main/2026-10-altium-designer-mcp-unbounded-allocation.md
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern: $S.parse::<$T>()
+      - pattern: $S.parse()
+      - pattern: $T::from_str_radix(...)
+      - pattern: $T::from_le_bytes(...)
+      - pattern: $T::from_be_bytes(...)
+      - pattern: $T::from_ne_bytes(...)
+      - pattern: $R.read_u16::<$E>()
+      - pattern: $R.read_u32::<$E>()
+      - pattern: $R.read_u64::<$E>()
+      - pattern: $R.read_i32::<$E>()
+      - pattern: $R.read_i64::<$E>()
+    pattern-sanitizers:
+      - pattern: $N.min(...)
+      - pattern: std::cmp::min(...)
+      - pattern: cmp::min(...)
+      - pattern: min(...)
+      - pattern: $N.clamp(...)
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern: $N > $LIMIT
+              - pattern: $N >= $LIMIT
+              - pattern: $LIMIT < $N
+              - pattern: $LIMIT <= $N
+          - focus-metavariable: $N
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: Vec::with_capacity($N)
+              - pattern: Vec::<$T>::with_capacity($N)
+              - pattern: String::with_capacity($N)
+              - pattern: HashMap::with_capacity($N)
+              - pattern: VecDeque::with_capacity($N)
+              - pattern: $V.reserve($N)
+              - pattern: $V.reserve_exact($N)
+              - pattern: $V.resize($N, ...)
+              - pattern: vec![$E; $N]
+          - focus-metavariable: $N
+
+  - id: rust-grow-loop-driven-by-parsed-index
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      A collection is grown in a loop until it reaches an index or count that
+      was parsed from input. A large value makes the loop allocate until the
+      process aborts, or spin for a long time when nothing is allocated. Check
+      the index against what the input can contain (for example the number of
+      fields the header declares) before the loop.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-834: Excessive Iteration"
+        - "CWE-789: Memory Allocation with Excessive Size Value"
+      references:
+        - https://github.com/embedded-society/altium-designer-mcp/security/advisories/GHSA-p2qw-h8m7-5x69
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              if let Ok($N) = $S.parse::<$T>() { ... }
+          - pattern-inside: |
+              if let Ok($N) = $S.parse() { ... }
+          - pattern-inside: |
+              let $N = <... $S.parse::<$T>() ...>;
+              ...
+          - pattern-inside: |
+              let $N: $TY = <... $S.parse() ...>;
+              ...
+          - pattern-inside: |
+              let $N = <... $T::from_le_bytes(...) ...>;
+              ...
+      - pattern-either:
+          - pattern: |
+              while $V.len() <= $N { ... }
+          - pattern: |
+              while $V.len() < $N { ... }
+      - pattern-not-inside: |
+          if <... $N > $L ...> { ... }
+          ...
+      - pattern-not-inside: |
+          if <... $N >= $L ...> { ... }
+          ...
+      - pattern-not-inside: |
+          if <... $L < $N ...> { ... }
+          ...
+      - pattern-not-inside: |
+          if <... $L <= $N ...> { ... }
+          ...

@@ -1,0 +1,80 @@
+rules:
+  - id: postgres-rls-policy-using-true-for-anon
+    languages: [regex]
+    severity: ERROR
+    message: >-
+      This permissive row level security policy admits every row (USING (true))
+      and applies to anon or PUBLIC, the roles that requests made with a
+      Supabase anon key run as. Postgres combines permissive policies with OR,
+      so a narrower policy on the same table does not limit this one. Anyone
+      holding the public anon key can read every row through PostgREST. Drop
+      the policy and write one whose predicate states who may see a row, for
+      example USING (public_access = true) or USING (auth.uid() = user_id), and
+      keep personal columns such as email out of tables with an anonymous read
+      path.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-1188: Initialization of a Resource with an Insecure Default"
+        - "CWE-284: Improper Access Control"
+      references:
+        - https://github.com/Kronova-Intelligent-Systems/asset-intel-orchestration-engine/security/advisories/GHSA-8h52-3cfj-cmrw
+        - https://github.com/kasparovabi/security-research/blob/main/2026-09-kronova-profiles-rls.md
+        - https://www.postgresql.org/docs/current/sql-createpolicy.html
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+    paths:
+      include:
+        - "*.sql"
+    pattern-regex: >-
+      (?is)\bcreate\s+policy\s+(?:"(?:[^"]|"")*"|\w+)\s+on\s+[\w."]+(?![^;]*\bas\s+restrictive\b)(?![^;]*\bfor\s+(?:insert)\b)(?=[^;]*\busing\s*\(\s*\(?\s*true\s*\)?\s*\))(?:(?=[^;]*\bto\s+[\w",\s]*?\b(?:anon|public)\b)|(?![^;]*\bto\s))[^;]*;
+
+  - id: postgres-rls-policy-with-check-true-for-anon
+    languages: [regex]
+    severity: ERROR
+    message: >-
+      This permissive row level security policy lets anon or PUBLIC write any
+      row (WITH CHECK (true)). With a Supabase anon key, which ships in the
+      client bundle, anyone can insert or change rows in this table through
+      PostgREST. Write a WITH CHECK predicate that ties the row to the caller,
+      for example WITH CHECK (auth.uid() = user_id), and grant the write to
+      authenticated only.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-284: Improper Access Control"
+      references:
+        - https://github.com/Kronova-Intelligent-Systems/asset-intel-orchestration-engine/security/advisories/GHSA-8h52-3cfj-cmrw
+        - https://www.postgresql.org/docs/current/sql-createpolicy.html
+      confidence: HIGH
+      likelihood: HIGH
+      impact: HIGH
+    paths:
+      include:
+        - "*.sql"
+    pattern-regex: >-
+      (?is)\bcreate\s+policy\s+(?:"(?:[^"]|"")*"|\w+)\s+on\s+[\w."]+(?![^;]*\bas\s+restrictive\b)(?=[^;]*\bwith\s+check\s*\(\s*\(?\s*true\s*\)?\s*\))(?:(?=[^;]*\bto\s+[\w",\s]*?\b(?:anon|public)\b)|(?![^;]*\bto\s))[^;]*;
+
+  - id: postgres-rls-disabled
+    languages: [regex]
+    severity: WARNING
+    message: >-
+      Row level security is turned off for this table. In a Supabase project the
+      anon and authenticated roles have table grants by default, so with RLS off
+      anyone holding the public anon key can read and change every row. Keep
+      RLS enabled and add policies, or move the table out of the exposed schema.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-284: Improper Access Control"
+      references:
+        - https://github.com/Kronova-Intelligent-Systems/asset-intel-orchestration-engine/security/advisories/GHSA-8h52-3cfj-cmrw
+        - https://supabase.com/docs/guides/database/postgres/row-level-security
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    paths:
+      include:
+        - "*.sql"
+    pattern-regex: (?i)\balter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?[\w."]+\s+disable\s+row\s+level\s+security\b

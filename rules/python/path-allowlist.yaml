@@ -1,0 +1,90 @@
+rules:
+  - id: python-mcp-tool-path-without-allowlist
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A path argument of this MCP tool reaches a file operation without passing
+      an allowed-directory check. The arguments of a tool call come from the
+      model, and a prompt injection in any document the model reads can choose
+      them, so the server can be made to read or write any file the process can.
+      Resolve the path (following symlinks) and refuse it unless it stays under
+      one of the configured roots. If the documentation promises a flag such as
+      --allow-dir, make sure the code enforces it and fails loudly on unknown
+      flags.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+        - "CWE-1068: Inconsistency Between Implementation and Documented Design"
+      references:
+        - https://github.com/SylphxAI/anymd/security/advisories/GHSA-qr3f-g5wf-225w
+        - https://github.com/kasparovabi/security-research/blob/main/2026-09-anymd-allow-dir-not-implemented.md
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  @$MCP.tool(...)
+                  def $F(..., $P, ...):
+                      ...
+              - pattern-inside: |
+                  @$MCP.tool(...)
+                  async def $F(..., $P, ...):
+                      ...
+              - pattern-inside: |
+                  @$MCP.tool
+                  def $F(..., $P, ...):
+                      ...
+              - pattern-inside: |
+                  @$MCP.tool
+                  async def $F(..., $P, ...):
+                      ...
+          - metavariable-regex:
+              metavariable: $P
+              regex: (?i).*(path|file|dir|folder|name|uri|src|dest|target).*
+          - focus-metavariable: $P
+    pattern-sanitizers:
+      - by-side-effect: true
+        patterns:
+          - pattern: $CHECK(..., $X, ...)
+          - metavariable-regex:
+              metavariable: $CHECK
+              regex: (?i).*(allow|permit|within|inside|sandbox|confine|jail|validate|ensure|check|guard|authori[sz]e|restrict|safe).*
+          - focus-metavariable: $X
+      - patterns:
+          - pattern: $CHECK(...)
+          - metavariable-regex:
+              metavariable: $CHECK
+              regex: (?i).*(allow|permit|within|inside|sandbox|confine|jail|validate|ensure|check|guard|authori[sz]e|restrict|safe).*
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern: $X.is_relative_to(...)
+              - pattern: $X.relative_to(...)
+          - focus-metavariable: $X
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: open($X, ...)
+              - pattern: io.open($X, ...)
+              - pattern: os.open($X, ...)
+              - pattern: os.listdir($X)
+              - pattern: os.scandir($X)
+              - pattern: os.remove($X)
+              - pattern: os.unlink($X)
+              - pattern: shutil.copy($X, ...)
+              - pattern: shutil.copyfile($X, ...)
+              - pattern: shutil.rmtree($X, ...)
+              - pattern: $X.read_text(...)
+              - pattern: $X.read_bytes(...)
+              - pattern: $X.write_text(...)
+              - pattern: $X.write_bytes(...)
+              - pattern: $X.open(...)
+              - pattern: $X.iterdir()
+              - pattern: fitz.open($X, ...)
+              - pattern: pypdf.PdfReader($X, ...)
+              - pattern: pdfplumber.open($X, ...)
+          - focus-metavariable: $X

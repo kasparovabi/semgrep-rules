@@ -1,0 +1,68 @@
+rules:
+  - id: ts-mcp-tool-path-without-allowlist
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      An argument of this MCP tool handler reaches a filesystem call without
+      passing an allowed-directory check. Tool arguments come from the model,
+      and a prompt injection in any document the model reads can choose them,
+      so the server can be made to read or write any file the process can.
+      Resolve the path with fs.realpath and refuse it unless it stays under one
+      of the configured roots. If the documentation promises a flag such as
+      --allow-dir, make sure the code enforces it and fails loudly on unknown
+      flags.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+        - "CWE-1068: Inconsistency Between Implementation and Documented Design"
+      references:
+        - https://github.com/SylphxAI/anymd/security/advisories/GHSA-qr3f-g5wf-225w
+        - https://github.com/kasparovabi/security-research/blob/main/2026-09-anymd-allow-dir-not-implemented.md
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: HIGH
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: $SERVER.tool(..., async ($ARGS, ...) => { ... })
+              - pattern-inside: $SERVER.tool(..., ($ARGS, ...) => { ... })
+              - pattern-inside: $SERVER.registerTool(..., async ($ARGS, ...) => { ... })
+              - pattern-inside: $SERVER.registerTool(..., ($ARGS, ...) => { ... })
+          - focus-metavariable: $ARGS
+    pattern-sanitizers:
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern: $CHECK(..., $X, ...)
+              - pattern: await $CHECK(..., $X, ...)
+          - metavariable-regex:
+              metavariable: $CHECK
+              regex: (?i).*(allow|permit|within|inside|sandbox|confine|jail|validate|ensure|check|guard|authori[sz]e|restrict|safe).*
+          - focus-metavariable: $X
+      - patterns:
+          - pattern: $CHECK(...)
+          - metavariable-regex:
+              metavariable: $CHECK
+              regex: (?i).*(allow|permit|within|inside|sandbox|confine|jail|validate|ensure|check|guard|authori[sz]e|restrict|safe).*
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $FS.readFile($X, ...)
+              - pattern: $FS.readFileSync($X, ...)
+              - pattern: $FS.writeFile($X, ...)
+              - pattern: $FS.writeFileSync($X, ...)
+              - pattern: $FS.appendFile($X, ...)
+              - pattern: $FS.readdir($X, ...)
+              - pattern: $FS.readdirSync($X, ...)
+              - pattern: $FS.rm($X, ...)
+              - pattern: $FS.unlink($X, ...)
+              - pattern: $FS.open($X, ...)
+              - pattern: $FS.createReadStream($X, ...)
+              - pattern: $FS.createWriteStream($X, ...)
+              - pattern: $FS.copyFile($X, ...)
+          - metavariable-regex:
+              metavariable: $FS
+              regex: ^(fs|fsp|fsPromises|promises|fs\.promises)$
+          - focus-metavariable: $X

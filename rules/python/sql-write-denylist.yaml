@@ -1,0 +1,48 @@
+rules:
+  - id: python-sql-write-keyword-denylist-without-into
+    languages: [python]
+    severity: WARNING
+    message: >-
+      This looks like a denylist of SQL write keywords used to decide whether a
+      statement is read-only, and it does not contain INTO. SELECT ... INTO
+      creates and fills a table in PostgreSQL, and SELECT ... INTO OUTFILE or
+      DUMPFILE writes a file on a MySQL server, so these statements pass as
+      reads. Adding words does not make a denylist complete. Accept only a
+      bounded read grammar (for example by parsing with sqlglot and allowing
+      only plain Select nodes without an into clause) and treat everything else
+      as a write, and run read-only sessions with a database account that has
+      no CREATE and no FILE privilege.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-863: Incorrect Authorization"
+        - "CWE-184: Incomplete List of Disallowed Inputs"
+      references:
+        - https://github.com/clidey/whodb/security/advisories/GHSA-pvf2-6h4x-r24j
+        - https://github.com/kasparovabi/security-research/blob/main/2026-09-whodb-select-into.md
+      confidence: MEDIUM
+      likelihood: MEDIUM
+      impact: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: '[..., $A, ...]'
+          - pattern: '(..., $A, ...)'
+          - pattern: '{..., $A, ...}'
+      - metavariable-regex:
+          metavariable: $A
+          regex: (?i)^[rbu]?["']insert["']$
+      - pattern-either:
+          - pattern: '[..., $B, ...]'
+          - pattern: '(..., $B, ...)'
+          - pattern: '{..., $B, ...}'
+      - metavariable-regex:
+          metavariable: $B
+          regex: (?i)^[rbu]?["']update["']$
+      - pattern-either:
+          - pattern: '[..., $C, ...]'
+          - pattern: '(..., $C, ...)'
+          - pattern: '{..., $C, ...}'
+      - metavariable-regex:
+          metavariable: $C
+          regex: (?i)^[rbu]?["'](delete|drop|alter|create|truncate)["']$
+      - pattern-not-regex: (?i)["']into["']

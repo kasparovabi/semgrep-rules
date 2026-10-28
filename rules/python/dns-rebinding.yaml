@@ -1,0 +1,57 @@
+rules:
+  - id: python-mcp-dns-rebinding-protection-disabled
+    languages: [python]
+    severity: WARNING
+    message: >-
+      DNS rebinding protection is turned off for this MCP HTTP transport. A web
+      page that rebinds its hostname to 127.0.0.1 is same-origin to the browser
+      and can call the local server and read the results. Keep the protection on
+      and list the hosts and origins the server should answer to.
+    metadata:
+      category: security
+      cwe:
+        - "CWE-346: Origin Validation Error"
+      references:
+        - https://github.com/devantler-tech/ksail/security/advisories/GHSA-g57x-rm7r-hf26
+        - https://github.com/GuyMannDude/mnemo-cortex/security/advisories/GHSA-682p-grrx-wrwg
+      confidence: HIGH
+      likelihood: MEDIUM
+      impact: HIGH
+    pattern-either:
+      - pattern: TransportSecuritySettings(..., enable_dns_rebinding_protection=False, ...)
+      - pattern: mcp.server.transport_security.TransportSecuritySettings(..., enable_dns_rebinding_protection=False, ...)
+
+  - id: python-loopback-server-without-host-check
+    languages: [python]
+    severity: INFO
+    message: >-
+      This server binds to a loopback address and decides who may connect by the
+      peer address. A browser on the same machine is also a loopback peer, and a
+      DNS rebinding page reaches the server same-origin, often with no Origin
+      header. If the API has no authentication, also refuse requests whose Host
+      header is not a loopback name or the configured bind host.
+    metadata:
+      category: security
+      subcategory: [audit]
+      cwe:
+        - "CWE-346: Origin Validation Error"
+      references:
+        - https://github.com/GuyMannDude/mnemo-cortex/security/advisories/GHSA-682p-grrx-wrwg
+      confidence: LOW
+      likelihood: LOW
+      impact: HIGH
+    patterns:
+      - pattern: |
+          if <... $REQ.client.host ...> not in $ALLOWED:
+              ...
+      - pattern-not-inside: |
+          if <... $REQ.client.host ...> not in $ALLOWED:
+              ...
+          ...
+          $H = <... $REQ.headers ...>
+      - pattern-not-inside: |
+          if <... $REQ.client.host ...> not in $ALLOWED:
+              ...
+          ...
+          if <... $REQ.headers ...>:
+              ...
